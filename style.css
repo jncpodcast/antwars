@@ -1,0 +1,103 @@
+/* Basic reset and styling */
+body, html {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+}
+
+#game-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    width: 300px;
+    height: 600px;
+    background-color: lightgreen;
+    margin: auto;
+}
+
+#timer, #score, #level {
+    position: absolute;
+    bottom: 10px; /* Move to the bottom */
+    font-size: 20px;
+    color: black;
+    background-color: rgba(255, 255, 255, 0.8);
+    padding: 5px;
+    border-radius: 5px;
+}
+
+#timer { left: 20px; } /* Position the timer to the left */
+#score { right: 20px; } /* Position the score to the right */
+#level { left: 50%; transform: translateX(-50%); } /* Center the level display at the bottom */
+
+#game-area {
+    position: relative;
+    width: 100%;
+    height: 90%;
+    overflow: hidden;
+}
+
+.ant {
+    position: absolute;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    animation: crawl linear forwards;
+}
+
+/* Ghost Ant (smaller size and rotated) */
+.ghost-ant {
+    width: 20px;
+    height: 20px;
+    background-image: url('https://opengameart.org/sites/default/files/walking_7.gif');
+    transform: rotate(180deg);
+}
+
+/* Regular Ant (same image as ghost, but larger size) */
+.regular-ant {
+    width: 30px;
+    height: 30px;
+    background-image: url('https://opengameart.org/sites/default/files/walking_7.gif');
+    transform: rotate(180deg);
+}
+
+/* Carpenter Ant (rotated 90 degrees) */
+.carpenter-ant, .flying-carpenter-ant {
+    width: 40px;
+    height: 40px;
+    background-image: url('https://i.pinimg.com/originals/30/36/e7/3036e7ec6d2d2ecbbada37f8a06dbd45.gif');
+    transform: rotate(90deg);
+}
+
+#start-button, #next-level-button {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 20px;
+    font-size: 20px;
+    background-color: #007BFF;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    z-index: 10;
+}
+
+#start-button:hover, #next-level-button:hover {
+    background-color: #0056b3;
+}
+
+.hidden {
+    display: none;
+}
+
+@keyframes crawl {
+    0% {
+        top: 0;
+    }
+    100% {
+        top: 100%;
+    }
+}
