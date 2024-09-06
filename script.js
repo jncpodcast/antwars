@@ -11,6 +11,7 @@ const scoreDisplay = document.getElementById('score-value');
 const levelDisplay = document.getElementById('level-value');
 const startButton = document.getElementById('start-button');
 const nextLevelButton = document.getElementById('next-level-button'); // Next Level Button
+const patreonBanner = document.getElementById('patreon-banner');
 
 let gamePaused = false; // Track if the game is paused between levels
 
@@ -35,9 +36,8 @@ function spawnAnt(type, speed) {
     ant.style.animationDuration = `${speed}s`;
     ant.style.animationDelay = `0s`;
 
-    // Handle both touch and click events for squishing
     const squishHandler = (event) => {
-        event.preventDefault(); // Prevent default behavior to avoid duplicate events
+        event.preventDefault(); // Prevent default behavior
         squishAnt(ant);
     };
 
@@ -50,27 +50,19 @@ function spawnAnt(type, speed) {
 
 // Squish ant function
 function squishAnt(ant) {
-    // Check if the ant has already been squished to prevent duplicate handling
     if (ant.classList.contains('squished')) return;
     ant.classList.add('squished');
 
     score += 10;
     scoreDisplay.innerText = score;
 
-    // Stop the movement and change to squished image
     ant.style.animationPlayState = 'paused';
 
-    // Replace the ant with the squished image
     const squishedImageUrl = 'https://static.wixstatic.com/media/7b5caa_41c47076103b4288b8efa441bc66a7e8~mv2.png';
     ant.style.backgroundImage = `url('${squishedImageUrl}')`;
     ant.style.backgroundSize = 'contain';
-    ant.style.transform = ''; // Remove any rotation for the squished image
+    ant.style.transform = ''; // Remove rotation for the squished image
 
-    // Adjust size of the squished ant relative to the original size
-    const antWidth = ant.offsetWidth;
-    ant.style.width = `${antWidth}px`; // Keep size the same
-
-    // Remove the ant after a short delay
     setTimeout(() => {
         ant.remove();
         ants = ants.filter(a => a !== ant);
@@ -94,15 +86,8 @@ function generateAnts() {
 function startGame() {
     startButton.classList.add('hidden');
     nextLevelButton.classList.add('hidden');
+    patreonBanner.classList.add('hidden');
     gamePaused = false; // Unpause the game when starting
-
-    // Reset timer and score if starting a new game
-    if (level === 1 && score === 0) {
-        timeRemaining = 60;
-    }
-
-    timerDisplay.innerText = timeRemaining;
-    scoreDisplay.innerText = score;
 
     const gameInterval = setInterval(() => {
         if (gamePaused) return; // Pause the timer if the game is paused
@@ -119,36 +104,32 @@ function startGame() {
     generateAnts(); // Start generating ants for the current level
 }
 
-// End current level and show next level button
+// End current level and show next level button and banner
 function endLevel() {
-    gamePaused = true; // Pause the game at the end of the level
+    gamePaused = true;
 
-    // Stop generating new ants and clear existing ants
     ants.forEach(ant => ant.remove());
     ants = [];
 
-    // Show Next Level button
     nextLevelButton.classList.remove('hidden');
+    patreonBanner.classList.remove('hidden');
 }
 
 // Proceed to the next level
 function nextLevel() {
     level++;
     levelDisplay.innerText = level;
-    timeRemaining = 60; // Reset time for the next level, but keep score
-    startGame(); // Start the next level
+    timeRemaining = 60;
+    startGame();
+
+    patreonBanner.classList.add('hidden');
 }
 
-// Start game button click handler
 startButton.addEventListener('click', () => {
     timeRemaining = 60;
-    score = 0; // Reset score when starting a new game
+    score = 0;
     scoreDisplay.innerText = score;
     startGame();
 });
 
-// Next level button click handler
 nextLevelButton.addEventListener('click', nextLevel);
-
-// Optional: Allow restarting the game after all levels
-// You can implement this based on your game design
