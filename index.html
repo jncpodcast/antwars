@@ -1,24 +1,985 @@
 <!DOCTYPE html>
-<html lang="en" >
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>CodePen - Ant Wars</title>
-  <link rel="stylesheet" href="./style.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>JNC Ant Wars Arcade — BUILD 3.3</title>
+  <meta name="theme-color" content="#d9dde2" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Ant Wars" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <style>
+    :root {
+      --game-w: 300px;
+      --game-h: 600px;
+      --scale: 1;
+      --bg: #d9dde2;
+      --panel: #0f172a;
+      --ink: #111827;
+      --accent: #2563eb;
+      --danger: #dc2626;
+      --good: #16a34a;
+      --gold: #f59e0b;
+      --hud: rgba(255,255,255,.78);
+    }
+    * { box-sizing: border-box; }
+    html, body { width:100%; height:100%; margin:0; overflow:hidden; }
+    body {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      overscroll-behavior: none;
+    }
+    button { font: inherit; }
+    .stage {
+      position: fixed;
+      inset: 0;
+      padding:
+        env(safe-area-inset-top)
+        env(safe-area-inset-right)
+        env(safe-area-inset-bottom)
+        env(safe-area-inset-left);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at 50% 30%, #f3f4f6 0%, var(--bg) 72%);
+      overflow: hidden;
+    }
+    .game {
+      position: relative;
+      width: var(--game-w);
+      height: var(--game-h);
+      overflow: hidden;
+      border-radius: 16px;
+      background: linear-gradient(#e7eaee, #d7dbe0);
+      box-shadow: 0 18px 50px rgba(15,23,42,.24), inset 0 0 0 2px rgba(255,255,255,.55);
+      transform: scale(var(--scale));
+      transform-origin: center;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+      isolation: isolate;
+    }
+    .watermark { position:absolute; inset:0; display:grid; place-items:center; pointer-events:none; z-index:0; }
+    .watermark img { max-width:78%; max-height:78%; opacity:.065; filter: grayscale(1); }
 
+    .hud { position:absolute; inset:0; z-index:10; pointer-events:none; display:grid; grid-template-rows:auto auto 1fr auto; }
+    .topbar, .bottombar {
+      min-height: 42px;
+      padding: 7px 8px;
+      gap:4px;
+      background:var(--hud);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      overflow:hidden;
+    }
+    .topbar {
+      display:grid;
+      grid-template-columns:minmax(0,1fr) auto auto auto auto;
+      align-items:center;
+    }
+    .bottombar {
+      display:grid;
+      grid-template-columns:repeat(3, minmax(0,1fr));
+      align-items:center;
+      justify-items:stretch;
+    }
+    .chip {
+      min-width:0;
+      max-width:100%;
+      padding:4px 7px;
+      border-radius:999px;
+      background:rgba(15,23,42,.08);
+      font-size:10px;
+      line-height:1.1;
+      font-weight:800;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      justify-self:stretch;
+    }
+    .chip.level { width:100%; max-width:none; }
+    .chip.combo { background:rgba(245,158,11,.18); text-align:center; }
+    .chip.score { background:rgba(22,163,74,.16); text-align:center; min-width:40px; }
+    .bottombar .chip, .topbar > .chip:not(.level) { text-align:center; }
+    .hud-controls { display:flex; gap:4px; pointer-events:auto; justify-self:end; flex:0 0 auto; }
+    .icon-btn {
+      width:27px; height:27px; padding:0; border:0; border-radius:50%;
+      display:grid; place-items:center; cursor:pointer;
+      color:#fff; background:#334155; box-shadow:0 3px 8px rgba(15,23,42,.2);
+      font-size:13px;
+    }
+    .meter-wrap { padding:5px 8px 7px; background:rgba(255,255,255,.67); }
+    .meter-line { display:flex; justify-content:space-between; font-size:9px; font-weight:900; margin-bottom:3px; }
+    .meter { height:9px; border-radius:999px; overflow:hidden; background:rgba(15,23,42,.14); box-shadow:inset 0 1px 2px rgba(0,0,0,.2); }
+    .meter-fill { height:100%; width:0%; transition:width .2s ease; background:linear-gradient(90deg,#22c55e 0%,#f59e0b 62%,#ef4444 100%); }
+    .boss-meter { display:none; }
+    .boss-meter.show { display:block; }
+    .boss-meter .meter-fill { width:100%; background:linear-gradient(90deg,#7c3aed,#db2777); }
+    .bottombar { align-self:end; font-size:9px; }
+
+    .entity { position:absolute; left:0; top:0; z-index:4; transform-origin:50% 50%; will-change:transform; }
+    .ant { filter:saturate(1.08) contrast(1.08) drop-shadow(0 2px 3px rgba(0,0,0,.32)); }
+    .ant img, .queen img { width:100%; height:100%; display:block; pointer-events:none; }
+    .ant.ghost { opacity:.92; filter:saturate(1.02) brightness(1.06) drop-shadow(0 0 0 1px rgba(255,255,255,.55)) drop-shadow(0 2px 3px rgba(0,0,0,.28)); }
+    .ant.regular { filter:saturate(1.08) contrast(1.1) drop-shadow(0 2px 3px rgba(0,0,0,.32)); }
+    .ant.carpenter { filter:saturate(1.08) contrast(1.12) brightness(.98) drop-shadow(0 2px 4px rgba(0,0,0,.34)); }
+    .ant.carpenter.damaged { filter:sepia(1) saturate(4) hue-rotate(330deg) drop-shadow(0 0 5px rgba(220,38,38,.8)); }
+    .ant.flying { filter:saturate(1.14) contrast(1.08) drop-shadow(0 0 3px rgba(37,99,235,.18)) drop-shadow(0 2px 4px rgba(37,99,235,.32)); }
+    .hitbox { position:absolute; inset:-8px; border-radius:50%; }
+    .queen {
+      z-index:5;
+      filter: hue-rotate(255deg) saturate(1.65) contrast(1.15) drop-shadow(0 0 12px rgba(124,58,237,.72));
+    }
+    .queen.hit { animation:queenHit .12s linear; }
+    @keyframes queenHit { 50% { filter:brightness(2) saturate(2) drop-shadow(0 0 18px #fff); } }
+
+    .powerup {
+      z-index:7;
+      width:36px; height:36px;
+      display:grid; place-items:center;
+      border-radius:50%;
+      background:radial-gradient(circle at 35% 30%,#fff,#fef3c7 42%,#f59e0b 100%);
+      border:2px solid rgba(255,255,255,.9);
+      box-shadow:0 0 0 3px rgba(245,158,11,.26),0 5px 12px rgba(15,23,42,.3);
+      font-size:21px;
+      color:#111827;
+      animation:powerPulse .7s ease-in-out infinite alternate;
+    }
+    .powerup.powerup-slipper img { width:16px; height:30px; display:block; object-fit:contain; transform:rotate(-10deg); filter: drop-shadow(0 1px 1px rgba(255,255,255,.35)); }
+    @keyframes powerPulse { to { transform:scale(1.12); } }
+
+    .score-pop {
+      position:absolute; z-index:20; pointer-events:none;
+      font-size:12px; font-weight:1000; color:#111827;
+      text-shadow:0 1px 0 #fff, 0 0 6px #fff;
+      transform:translate(-50%,-50%);
+      animation:scoreFloat .72s ease-out forwards;
+    }
+    @keyframes scoreFloat { to { opacity:0; transform:translate(-50%,-130%); } }
+    .banner {
+      position:absolute; left:50%; top:112px; z-index:22; pointer-events:none;
+      transform:translate(-50%,-20px) scale(.9); opacity:0;
+      padding:8px 12px; border-radius:12px; color:#fff; background:rgba(15,23,42,.9);
+      font-weight:1000; font-size:15px; letter-spacing:.8px; text-align:center;
+      transition:.22s ease;
+    }
+    .banner.show { opacity:1; transform:translate(-50%,0) scale(1); }
+
+    .overlay {
+      position:absolute; inset:0; z-index:50; display:grid; place-items:center;
+      padding:14px; background:rgba(15,23,42,.67); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px);
+    }
+    .overlay[hidden] { display:none; }
+    .panel {
+      width:100%; max-width:264px; padding:16px 14px 14px; border-radius:16px;
+      color:#e5e7eb; background:var(--panel); border:1px solid rgba(255,255,255,.1);
+      text-align:center; box-shadow:0 14px 34px rgba(0,0,0,.43);
+    }
+    .panel h1 { margin:0 0 7px; font-size:21px; }
+    .panel h2 { margin:0 0 7px; font-size:17px; }
+    .panel p { margin:0 0 10px; font-size:11px; line-height:1.45; color:#cbd5e1; }
+    .btns { display:grid; gap:7px; }
+    .primary, .secondary {
+      width:100%; border-radius:11px; padding:10px 11px; cursor:pointer; font-weight:900;
+    }
+    .primary { border:0; color:#fff; background:var(--accent); box-shadow:0 5px 15px rgba(37,99,235,.35); }
+    .secondary { color:#e5e7eb; background:transparent; border:1px solid rgba(255,255,255,.25); }
+    .small-note { margin-top:8px!important; font-size:9px!important; opacity:.75; }
+    .stats-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin:10px 0; }
+    .stat { padding:8px 5px; border-radius:10px; background:rgba(255,255,255,.07); }
+    .stat strong { display:block; color:#fff; font-size:15px; }
+    .stat span { font-size:9px; color:#94a3b8; text-transform:uppercase; letter-spacing:.5px; }
+    .build { position:absolute; right:5px; bottom:45px; z-index:12; font-size:7px; opacity:.38; pointer-events:none; }
+    .pause-mark { font-size:34px; margin-bottom:6px; }
+
+    .flash { position:absolute; inset:0; z-index:30; pointer-events:none; opacity:0; background:#fff; }
+    .flash.go { animation:flash .18s ease-out; }
+    @keyframes flash { 35% { opacity:.42; } }
+
+    @media (prefers-reduced-motion: reduce) {
+      .powerup, .score-pop, .queen.hit { animation:none!important; }
+      .meter-fill, .banner { transition:none!important; }
+    }
+  </style>
 </head>
 <body>
-<!-- partial:index.partial.html -->
-<div id="game-container">
-    <img id="top-image" src="https://static.wixstatic.com/media/7b5caa_c3fc837dfef04cf188bc5b7e04ba14d1~mv2.png" alt="Top Image" />
-    <div id="timer">Time: <span id="time-remaining">60</span>s</div>
-    <div id="score">Score: <span id="score-value">0</span></div>
-    <div id="level">Level: <span id="level-value">1</span></div>
-    <div id="game-area"></div>
-    <button id="start-button">Start Game</button>
-    <button id="next-level-button" class="hidden">Next Level</button>
-</div>
-<!-- partial -->
-  <script  src="./script.js"></script>
+  <div class="stage" id="stage">
+    <main class="game" id="game" aria-label="JNC Ant Wars game area">
+      <div class="watermark"><img src="https://static.wixstatic.com/media/7b5caa_c3fc837dfef04cf188bc5b7e04ba14d1~mv2.png" alt="" /></div>
 
+      <section class="hud" aria-live="polite">
+        <div class="topbar">
+          <div class="chip level" id="levelChip">Level 1 · Ghosts</div>
+          <div class="chip" id="timeChip">60s</div>
+          <div class="chip combo" id="comboChip">x1</div>
+          <div class="chip score" id="scoreChip">0</div>
+          <div class="hud-controls">
+            <button class="icon-btn" id="pauseBtn" aria-label="Pause">Ⅱ</button>
+            <button class="icon-btn" id="soundBtn" aria-label="Toggle sound">🔊</button>
+          </div>
+        </div>
+        <div class="meter-wrap">
+          <div class="meter-line"><span>INFESTATION</span><span id="infestationText">0%</span></div>
+          <div class="meter"><div class="meter-fill" id="infestationFill"></div></div>
+          <div class="boss-meter" id="bossMeter">
+            <div class="meter-line" style="margin-top:5px"><span>QUEEN ANT</span><span id="bossText">0 / 0</span></div>
+            <div class="meter"><div class="meter-fill" id="bossFill"></div></div>
+          </div>
+        </div>
+        <div></div>
+        <div class="bottombar">
+          <div class="chip" id="speedChip">Speed —</div>
+          <div class="chip" id="spawnChip">Spawn —</div>
+          <div class="chip" id="missedChip">Missed 0</div>
+        </div>
+      </section>
+
+      <div class="banner" id="banner"></div>
+      <div class="flash" id="flash"></div>
+      <div class="build">BUILD 3.3</div>
+
+      <section class="overlay" id="startOverlay">
+        <div class="panel">
+          <h1>JNC Ant Wars</h1>
+          <p>Squish the swarm, protect the kitchen, build combos, collect power-ups, and survive the Queen Ant every fifth level.</p>
+          <div class="btns">
+            <button class="primary" id="startBtn">Start Game</button>
+            <button class="secondary" id="installBtn" hidden>Install Ant Wars</button>
+            <button class="secondary" id="howBtn">How to Play</button>
+          </div>
+          <p class="small-note" id="bestText">Best score: 0</p>
+        </div>
+      </section>
+
+      <section class="overlay" id="betweenOverlay" hidden>
+        <div class="panel">
+          <h2 id="betweenTitle">Level Complete!</h2>
+          <p id="betweenDesc"></p>
+          <div class="stats-grid">
+            <div class="stat"><strong id="roundScore">0</strong><span>Score</span></div>
+            <div class="stat"><strong id="roundCombo">0</strong><span>Best Combo</span></div>
+          </div>
+          <div class="btns">
+            <button class="primary" id="nextBtn">Next Level</button>
+            <button class="secondary" id="replayBtn">Replay Level</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="overlay" id="gameOverOverlay" hidden>
+        <div class="panel">
+          <h1 id="gameOverTitle">Kitchen Overrun!</h1>
+          <p id="gameOverMessage">The colony took over.</p>
+          <div class="stats-grid">
+            <div class="stat"><strong id="finalScore">0</strong><span>Final Score</span></div>
+            <div class="stat"><strong id="finalBest">0</strong><span>Personal Best</span></div>
+            <div class="stat"><strong id="finalLevel">1</strong><span>Level Reached</span></div>
+            <div class="stat"><strong id="finalAccuracy">0%</strong><span>Accuracy</span></div>
+            <div class="stat"><strong id="finalCombo">0</strong><span>Best Combo</span></div>
+            <div class="stat"><strong id="finalSquished">0</strong><span>Squished</span></div>
+          </div>
+          <div class="btns">
+            <button class="primary" id="restartBtn">Play Again</button>
+            <button class="secondary" id="shareBtn">Share Score</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="overlay" id="pauseOverlay" hidden>
+        <div class="panel">
+          <div class="pause-mark">Ⅱ</div>
+          <h2>Paused</h2>
+          <p>The swarm is frozen until you return.</p>
+          <div class="btns"><button class="primary" id="resumeBtn">Resume</button></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+(function (root, factory) {
+  const api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  else root.AntWarsLogic = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  const SPECIES = Object.freeze({
+    ghost: Object.freeze({ infestation: 5, basePoints: 15 }),
+    regular: Object.freeze({ infestation: 7, basePoints: 12 }),
+    carpenter: Object.freeze({ infestation: 12, basePoints: 22 }),
+    flying: Object.freeze({ infestation: 9, basePoints: 18 })
+  });
+
+  function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
+  }
+
+  function difficultyLevel(levelIndex, introLastIndex = 4) {
+    return Math.max(0, Number(levelIndex) - introLastIndex);
+  }
+
+  function speedMultiplier(levelIndex, increase = 0.075) {
+    return 1 + difficultyLevel(levelIndex) * increase;
+  }
+
+  function spawnMultiplier(levelIndex, decrease = 0.05) {
+    return Math.max(0.34, 1 - difficultyLevel(levelIndex) * decrease);
+  }
+
+  function maxActiveAnts(levelIndex, base = 5, every = 3, cap = 11) {
+    return Math.min(cap, base + Math.floor(difficultyLevel(levelIndex) / every));
+  }
+
+  function comboMultiplier(combo) {
+    return clamp(1 + Math.floor(Math.max(0, combo - 1) / 5), 1, 5);
+  }
+
+  function infestationAfterEscape(current, speciesName) {
+    const amount = SPECIES[speciesName]?.infestation ?? 7;
+    return clamp(current + amount, 0, 100);
+  }
+
+  function reduceInfestation(current, amount) {
+    return clamp(current - Math.max(0, amount), 0, 100);
+  }
+
+  function accuracy(successfulTaps, totalTaps) {
+    if (!totalTaps) return 0;
+    return Math.round((successfulTaps / totalTaps) * 100);
+  }
+
+  function bossHealth(levelNumber) {
+    const bossNumber = Math.max(1, Math.ceil(levelNumber / 5));
+    return 22 + bossNumber * 8;
+  }
+
+  function isBossLevel(levelNumber) {
+    return levelNumber > 0 && levelNumber % 5 === 0;
+  }
+
+  function calculateKillScore(speciesName, combo, ageMs) {
+    const base = SPECIES[speciesName]?.basePoints ?? 10;
+    const multiplier = comboMultiplier(combo);
+    const fastBonus = ageMs <= 900 ? 12 : ageMs <= 1800 ? 6 : 0;
+    return { base, multiplier, fastBonus, total: base * multiplier + fastBonus };
+  }
+
+  return Object.freeze({
+    SPECIES,
+    clamp,
+    difficultyLevel,
+    speedMultiplier,
+    spawnMultiplier,
+    maxActiveAnts,
+    comboMultiplier,
+    infestationAfterEscape,
+    reduceInfestation,
+    accuracy,
+    bossHealth,
+    isBossLevel,
+    calculateKillScore
+  });
+});
+
+</script>
+  <script>
+  (() => {
+    'use strict';
+
+    const L = window.AntWarsLogic;
+    const ANT_IMG = 'https://i.pinimg.com/originals/30/36/e7/3036e7ec6d2d2ecbbada37f8a06dbd45.gif';
+    const SPLAT_IMG = 'https://static.wixstatic.com/media/7b5caa_41c47076103b4288b8efa441bc66a7e8~mv2.png';
+    const SLIPPER_ICON = 'data:image/png;base64,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';
+    const STORAGE_KEY = 'jnc_ant_wars_arcade_v3';
+
+    const CONFIG = Object.freeze({
+      container: { width: 300, height: 600 },
+      normalDuration: 60,
+      bossDuration: 70,
+      introLastIndex: 4,
+      maxActiveCap: 11,
+      powerupChance: 0.085,
+      comboWindowMs: 1800,
+      species: {
+        ghost: { label:'Ghost', size:15, speed:0.92, spawn:1.0, hp:1, points:15 },
+        regular: { label:'Regular', size:21, speed:1.0, spawn:.94, hp:1, points:12 },
+        carpenter: { label:'Carpenter', size:29, speed:.83, spawn:.88, hp:2, points:22 },
+        flying: { label:'Flying', size:21, speed:1.28, spawn:.82, hp:1, points:18 }
+      },
+      levels: [
+        { name:'Ghosts', mix:{ ghost:1 } },
+        { name:'Regulars', mix:{ regular:1 } },
+        { name:'Carpenters', mix:{ carpenter:1 } },
+        { name:'Fliers', mix:{ flying:1 } },
+        { name:'The Swarm', mix:{ ghost:.22, regular:.3, carpenter:.25, flying:.23 } }
+      ]
+    });
+
+    const $ = (id) => document.getElementById(id);
+    const game = $('game');
+    const startOverlay = $('startOverlay');
+    const betweenOverlay = $('betweenOverlay');
+    const gameOverOverlay = $('gameOverOverlay');
+    const pauseOverlay = $('pauseOverlay');
+    const levelChip = $('levelChip');
+    const timeChip = $('timeChip');
+    const comboChip = $('comboChip');
+    const scoreChip = $('scoreChip');
+    const infestationFill = $('infestationFill');
+    const infestationText = $('infestationText');
+    const bossMeter = $('bossMeter');
+    const bossFill = $('bossFill');
+    const bossText = $('bossText');
+    const speedChip = $('speedChip');
+    const spawnChip = $('spawnChip');
+    const missedChip = $('missedChip');
+    const banner = $('banner');
+    const flash = $('flash');
+    const soundBtn = $('soundBtn');
+    const pauseBtn = $('pauseBtn');
+    const installBtn = $('installBtn');
+    const bestText = $('bestText');
+
+    const saved = loadSettings();
+    let deferredInstallPrompt = null;
+    let audioContext = null;
+    let rafId = 0;
+    let spawnTimer = 0;
+    let bannerTimer = 0;
+
+    let state = freshState();
+
+    function freshState() {
+      return {
+        levelIndex: 0,
+        running: false,
+        paused: false,
+        timeLeft: CONFIG.normalDuration,
+        score: 0,
+        levelStartScore: 0,
+        missed: 0,
+        squished: 0,
+        totalTaps: 0,
+        successfulTaps: 0,
+        combo: 0,
+        highestCombo: 0,
+        lastHitAt: 0,
+        infestation: 0,
+        entities: new Map(),
+        nextEntityId: 1,
+        queen: null,
+        bossActive: false,
+        freezeUntil: 0,
+        levelStartedAt: 0,
+        lastFrameAt: 0,
+        levelEnded: false
+      };
+    }
+
+    function loadSettings() {
+      try {
+        const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+        return {
+          bestScore: Number(raw.bestScore) || 0,
+          sound: raw.sound !== false,
+          vibration: raw.vibration !== false
+        };
+      } catch {
+        return { bestScore:0, sound:true, vibration:true };
+      }
+    }
+
+    function saveSettings() {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)); }
+      catch (error) { console.info('[AntWars] Local storage unavailable:', error); }
+      updateBestText();
+    }
+
+    function updateBestText() { bestText.textContent = `Best score: ${saved.bestScore.toLocaleString()}`; }
+
+    function currentLevelNumber() { return state.levelIndex + 1; }
+    function isBossLevel() { return L.isBossLevel(currentLevelNumber()); }
+
+    function endlessLevel() {
+      const n = Math.max(1, state.levelIndex - CONFIG.introLastIndex);
+      const names = ['Antpocalypse','Colony Chaos','The March','Infestation','Tunnel Trouble','Swarm Surge'];
+      const ghost = Math.max(.05, .24 - n * .008);
+      const regular = Math.max(.15, .31 - n * .005);
+      const carpenter = Math.min(.39, .25 + n * .007);
+      const flying = Math.max(.14, 1 - ghost - regular - carpenter);
+      const total = ghost + regular + carpenter + flying;
+      return { name:`${names[(n-1)%names.length]} ${n}`, mix:{ ghost:ghost/total, regular:regular/total, carpenter:carpenter/total, flying:flying/total } };
+    }
+
+    function currentLevel() { return CONFIG.levels[state.levelIndex] || endlessLevel(); }
+    function levelLabel() { return `Level ${currentLevelNumber()} · ${currentLevel().name}`; }
+    function speedMultiplier() { return L.speedMultiplier(state.levelIndex, .075); }
+    function spawnMultiplier() { return L.spawnMultiplier(state.levelIndex, .05); }
+    function currentMaxAnts() { return L.maxActiveAnts(state.levelIndex, 5, 3, CONFIG.maxActiveCap); }
+
+    function isMobile() { return /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent); }
+    function isStandalone() { return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; }
+    function isFullscreen() { return document.fullscreenElement || document.webkitFullscreenElement; }
+    async function requestFullscreen() {
+      if (isStandalone() || isFullscreen()) return;
+      try {
+        const el = document.documentElement;
+        if (el.requestFullscreen) await el.requestFullscreen();
+        else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+      } catch (error) { console.info('[AntWars] Fullscreen unavailable:', error); }
+    }
+
+    function fitToScreen() {
+      const vv = window.visualViewport;
+      const w = vv?.width || window.innerWidth;
+      const h = vv?.height || window.innerHeight;
+      const safe = 4;
+      const scale = Math.max(.35, Math.min((w-safe)/CONFIG.container.width, (h-safe)/CONFIG.container.height));
+      game.style.setProperty('--scale', String(scale));
+    }
+
+    function initializeAudio() {
+      if (!saved.sound || audioContext) return;
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      audioContext = new AudioCtx();
+    }
+
+    function tone(freq=440, duration=.055, type='square', volume=.045, slide=0) {
+      if (!saved.sound) return;
+      initializeAudio();
+      if (!audioContext) return;
+      if (audioContext.state === 'suspended') audioContext.resume().catch(()=>{});
+      const now = audioContext.currentTime;
+      const osc = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, now);
+      if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(40, freq + slide), now + duration);
+      gain.gain.setValueAtTime(volume, now);
+      gain.gain.exponentialRampToValueAtTime(.0001, now + duration);
+      osc.connect(gain).connect(audioContext.destination);
+      osc.start(now); osc.stop(now + duration);
+    }
+
+    function vibrate(pattern) {
+      if (saved.vibration && navigator.vibrate) navigator.vibrate(pattern);
+    }
+
+    function showBanner(text, ms=850) {
+      clearTimeout(bannerTimer);
+      banner.textContent = text;
+      banner.classList.add('show');
+      bannerTimer = setTimeout(()=>banner.classList.remove('show'), ms);
+    }
+
+    function flashScreen() {
+      flash.classList.remove('go');
+      void flash.offsetWidth;
+      flash.classList.add('go');
+    }
+
+    function popup(text, x, y) {
+      const el = document.createElement('div');
+      el.className = 'score-pop';
+      el.textContent = text;
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
+      game.appendChild(el);
+      setTimeout(()=>el.remove(), 760);
+    }
+
+    function updateHud() {
+      levelChip.textContent = `L${currentLevelNumber()} · ${currentLevel().name}`;
+      timeChip.textContent = state.bossActive ? `${Math.max(0, Math.ceil(state.timeLeft))}s` : `${Math.max(0, Math.ceil(state.timeLeft))}s`;
+      const mult = L.comboMultiplier(state.combo);
+      comboChip.textContent = `x${mult} · ${state.combo}`;
+      scoreChip.textContent = state.score > 99999 ? `${Math.round(state.score/1000)}k` : state.score.toLocaleString();
+      missedChip.textContent = `Missed ${state.missed}`;
+      infestationFill.style.width = `${state.infestation}%`;
+      infestationText.textContent = `${Math.round(state.infestation)}%`;
+      soundBtn.textContent = saved.sound ? '🔊' : '🔇';
+
+      if (state.queen) {
+        bossMeter.classList.add('show');
+        const ratio = Math.max(0, state.queen.hp / state.queen.maxHp);
+        bossFill.style.width = `${ratio*100}%`;
+        bossText.textContent = `${state.queen.hp} / ${state.queen.maxHp}`;
+      } else {
+        bossMeter.classList.remove('show');
+      }
+    }
+
+    function pickSpecies() {
+      const mix = currentLevel().mix;
+      let r = Math.random();
+      for (const [name, weight] of Object.entries(mix)) {
+        r -= weight;
+        if (r <= 0) return name;
+      }
+      return Object.keys(mix).at(-1);
+    }
+
+    function scheduleSpawns() {
+      clearInterval(spawnTimer);
+      const mix = currentLevel().mix;
+      const weightedSpawn = Object.entries(mix).reduce((sum,[name,weight])=>sum + CONFIG.species[name].spawn*weight, 0);
+      const bossFactor = state.bossActive ? 1.28 : 1;
+      const interval = Math.max(210, 690 * weightedSpawn * spawnMultiplier() * bossFactor);
+      spawnChip.textContent = `Spawn ${Math.round(interval)}ms`;
+      speedChip.textContent = `Speed ${Math.round(50*speedMultiplier())} · Max ${currentMaxAnts()}`;
+      spawnTimer = setInterval(() => {
+        if (!state.running || state.paused || state.levelEnded) return;
+        const antCount = [...state.entities.values()].filter(e=>e.kind==='ant').length;
+        if (antCount < currentMaxAnts()) spawnAnt();
+      }, interval);
+    }
+
+    function spawnAnt() {
+      const speciesName = pickSpecies();
+      const spec = CONFIG.species[speciesName];
+      const id = state.nextEntityId++;
+      const el = document.createElement('div');
+      el.className = `entity ant ${speciesName}`;
+      el.dataset.entityId = String(id);
+      el.style.width = `${spec.size}px`;
+      el.style.height = `${spec.size}px`;
+      el.innerHTML = `<div class="hitbox"></div><img draggable="false" alt="${spec.label} ant" src="${ANT_IMG}">`;
+      game.appendChild(el);
+
+      const entity = {
+        id, kind:'ant', speciesName, el,
+        x0: 12 + Math.random()*(CONFIG.container.width-spec.size-24),
+        y: -spec.size - 8 - Math.random()*35,
+        amp: speciesName === 'flying' ? 58 : 36 + Math.random()*12,
+        freq: (speciesName === 'flying' ? .016 : .0115) * (.9+Math.random()*.25),
+        phase: Math.random()*Math.PI*2,
+        vy: 50*spec.speed*speedMultiplier(),
+        size:spec.size,
+        hp:spec.hp,
+        maxHp:spec.hp,
+        bornAt:performance.now(),
+        alive:true,
+        jitter:0,
+        nextJitterAt:performance.now()+500+Math.random()*700
+      };
+      state.entities.set(id, entity);
+      positionAnt(entity, performance.now());
+      el.addEventListener('pointerdown', (event)=>hitAnt(entity,event), {passive:false});
+    }
+
+    function positionAnt(ant, now) {
+      if (ant.speciesName === 'flying' && now >= ant.nextJitterAt) {
+        ant.jitter = (Math.random()-.5)*36;
+        ant.nextJitterAt = now + 420 + Math.random()*560;
+      }
+      const wave = ant.amp*Math.sin(ant.freq*ant.y+ant.phase);
+      const x = Math.max(1, Math.min(CONFIG.container.width-ant.size-1, ant.x0+wave+ant.jitter));
+      const dxdy = ant.amp*ant.freq*Math.cos(ant.freq*ant.y+ant.phase);
+      const vx = dxdy*ant.vy;
+      const angle = Math.atan2(ant.vy,vx)*180/Math.PI;
+      ant.el.style.transform = `translate(${x}px,${ant.y}px) rotate(${angle.toFixed(1)}deg)`;
+      ant.x = x;
+    }
+
+    function registerSuccessfulTap(now) {
+      state.totalTaps++;
+      state.successfulTaps++;
+      state.combo = now-state.lastHitAt <= CONFIG.comboWindowMs ? state.combo+1 : 1;
+      state.lastHitAt = now;
+      state.highestCombo = Math.max(state.highestCombo,state.combo);
+      if ([10,25,50,100].includes(state.combo)) {
+        showBanner(`${state.combo} HIT COMBO!`);
+        tone(520+state.combo*3,.14,'sawtooth',.055,220);
+        vibrate([20,30,35]);
+      }
+    }
+
+    function hitAnt(ant,event) {
+      if (!state.running || state.paused || !ant.alive) return;
+      event.preventDefault(); event.stopPropagation();
+      const now = performance.now();
+      registerSuccessfulTap(now);
+      ant.hp--;
+      tone(ant.hp > 0 ? 170 : 115,.05,'square',.045,ant.hp>0?40:-45);
+      vibrate(ant.hp > 0 ? 12 : 18);
+
+      if (ant.hp > 0) {
+        ant.el.classList.add('damaged');
+        popup('CRACK!',ant.x+ant.size/2,ant.y+ant.size/2);
+        updateHud();
+        return;
+      }
+
+      ant.alive=false;
+      const result=L.calculateKillScore(ant.speciesName,state.combo,now-ant.bornAt);
+      state.score+=result.total;
+      state.squished++;
+      const img=ant.el.querySelector('img');
+      if(img) img.src=SPLAT_IMG;
+      popup(`+${result.total}`,ant.x+ant.size/2,ant.y+ant.size/2);
+      if(result.fastBonus) popup('FAST!',ant.x+ant.size/2,ant.y+ant.size+4);
+      if(Math.random()<CONFIG.powerupChance) spawnPowerup(ant.x,ant.y);
+      setTimeout(()=>removeEntity(ant.id),230);
+      updateHud();
+    }
+
+    function missAnt(ant) {
+      state.missed++;
+      state.combo=0;
+      state.infestation=L.infestationAfterEscape(state.infestation,ant.speciesName);
+      tone(70,.11,'sawtooth',.04,-20);
+      vibrate([18,20,18]);
+      removeEntity(ant.id);
+      updateHud();
+      if(state.infestation>=100) gameOver('The kitchen was completely overrun.');
+    }
+
+    function spawnPowerup(x,y) {
+      const types=[
+        {key:'spray',icon:'🧴',label:'BUG SPRAY'},
+        {key:'slipper',icon:'',label:'THE SLIPPER'},
+        {key:'repellent',icon:'🛡️',label:'REPELLENT'}
+      ];
+      const p=types[Math.floor(Math.random()*types.length)];
+      const id=state.nextEntityId++;
+      const el=document.createElement('button');
+      el.className=`entity powerup powerup-${p.key}`;
+      el.type='button';
+      if (p.key === 'slipper') { const img=document.createElement('img'); img.src=SLIPPER_ICON; img.alt=''; el.appendChild(img); }
+      else el.textContent=p.icon;
+      el.setAttribute('aria-label',p.label);
+      el.style.left=`${Math.max(4,Math.min(260,x))}px`;
+      el.style.top=`${Math.max(105,Math.min(530,y))}px`;
+      game.appendChild(el);
+      const entity={id,kind:'powerup',type:p.key,label:p.label,el,expiresAt:performance.now()+4300};
+      state.entities.set(id,entity);
+      el.addEventListener('pointerdown',(event)=>{event.preventDefault();event.stopPropagation();activatePowerup(entity);},{passive:false});
+    }
+
+    function activatePowerup(power) {
+      if(!state.running||state.paused) return;
+      state.totalTaps++; state.successfulTaps++;
+      tone(420,.16,'triangle',.07,500); vibrate([30,30,50]); flashScreen();
+      if(power.type==='spray') {
+        state.freezeUntil=performance.now()+5000;
+        showBanner('BUG SPRAY · 5 SECOND FREEZE');
+      } else if(power.type==='slipper') {
+        let cleared=0;
+        [...state.entities.values()].forEach(entity=>{
+          if(entity.kind==='ant'&&entity.alive){ entity.alive=false; removeEntity(entity.id); cleared++; }
+        });
+        state.score+=cleared*6;
+        showBanner(`THE SLIPPER · ${cleared} CLEARED`);
+      } else {
+        state.infestation=L.reduceInfestation(state.infestation,20);
+        showBanner('REPELLENT · INFESTATION -20%');
+      }
+      removeEntity(power.id); updateHud();
+    }
+
+    function spawnQueen() {
+      const hp=L.bossHealth(currentLevelNumber());
+      const id=state.nextEntityId++;
+      const el=document.createElement('div');
+      el.className='entity queen';
+      el.style.width='86px'; el.style.height='86px';
+      el.innerHTML=`<div class="hitbox"></div><img draggable="false" alt="Queen Ant" src="${ANT_IMG}">`;
+      game.appendChild(el);
+      const queen={id,kind:'queen',el,hp,maxHp:hp,size:86,x:107,y:155,bornAt:performance.now(),alive:true};
+      state.queen=queen; state.entities.set(id,queen);
+      el.addEventListener('pointerdown',(event)=>hitQueen(queen,event),{passive:false});
+      updateHud(); showBanner('QUEEN ANT APPROACHES!',1200); tone(95,.45,'sawtooth',.065,45); vibrate([80,70,100]);
+    }
+
+    function hitQueen(queen,event) {
+      if(!state.running||state.paused||!queen.alive) return;
+      event.preventDefault();event.stopPropagation();
+      const now=performance.now(); registerSuccessfulTap(now);
+      queen.hp--;
+      const points=5*L.comboMultiplier(state.combo);
+      state.score+=points;
+      popup(`+${points}`,queen.x+queen.size/2,queen.y+queen.size/2);
+      queen.el.classList.remove('hit'); void queen.el.offsetWidth; queen.el.classList.add('hit');
+      tone(130+Math.min(260,state.combo*4),.05,'square',.055,65); vibrate(14);
+      if(queen.hp<=0) defeatQueen();
+      updateHud();
+    }
+
+    function defeatQueen() {
+      const queen=state.queen;
+      if(!queen||!queen.alive) return;
+      queen.alive=false;
+      const bonus=500*Math.ceil(currentLevelNumber()/5);
+      state.score+=bonus;
+      state.infestation=L.reduceInfestation(state.infestation,25);
+      popup(`QUEEN +${bonus}`,queen.x+queen.size/2,queen.y+queen.size/2);
+      showBanner('QUEEN DEFEATED!',1300); flashScreen(); tone(340,.38,'triangle',.08,620); vibrate([70,40,90,40,120]);
+      setTimeout(()=>{removeEntity(queen.id);state.queen=null;endLevel('Queen defeated!');},720);
+    }
+
+    function removeEntity(id) {
+      const entity=state.entities.get(id);
+      if(!entity) return;
+      entity.el?.remove();
+      state.entities.delete(id);
+      if(state.queen?.id===id) state.queen=null;
+    }
+
+    function clearEntities() {
+      state.entities.forEach(entity=>entity.el?.remove());
+      state.entities.clear();
+      game.querySelectorAll('.entity,.score-pop').forEach(el=>el.remove());
+      state.queen=null;
+    }
+
+    function startLevel() {
+      clearInterval(spawnTimer);
+      clearEntities();
+      state.running=true; state.paused=false; state.levelEnded=false;
+      state.bossActive=isBossLevel();
+      state.timeLeft=state.bossActive?CONFIG.bossDuration:CONFIG.normalDuration;
+      state.levelStartedAt=performance.now(); state.lastFrameAt=0; state.levelStartScore=state.score;
+      state.freezeUntil=0;
+      startOverlay.hidden=true; betweenOverlay.hidden=true; gameOverOverlay.hidden=true; pauseOverlay.hidden=true;
+      if(state.bossActive) spawnQueen();
+      scheduleSpawns(); updateHud(); showBanner(state.bossActive?'BOSS WAVE':levelLabel());
+    }
+
+    function endLevel(message='Level cleared!') {
+      if(state.levelEnded||!state.running) return;
+      state.levelEnded=true; state.running=false; clearInterval(spawnTimer); clearEntities();
+      $('betweenTitle').textContent=state.bossActive?'Boss Defeated!':'Level Complete!';
+      $('betweenDesc').textContent=`${message} Infestation: ${Math.round(state.infestation)}%.`;
+      $('roundScore').textContent=state.score.toLocaleString();
+      $('roundCombo').textContent=String(state.highestCombo);
+      betweenOverlay.hidden=false; updateHud();
+    }
+
+    function gameOver(message) {
+      if(state.levelEnded) return;
+      state.levelEnded=true; state.running=false; clearInterval(spawnTimer); clearEntities();
+      saved.bestScore=Math.max(saved.bestScore,state.score); saveSettings();
+      $('gameOverMessage').textContent=message;
+      $('finalScore').textContent=state.score.toLocaleString();
+      $('finalBest').textContent=saved.bestScore.toLocaleString();
+      $('finalLevel').textContent=String(currentLevelNumber());
+      $('finalAccuracy').textContent=`${L.accuracy(state.successfulTaps,state.totalTaps)}%`;
+      $('finalCombo').textContent=String(state.highestCombo);
+      $('finalSquished').textContent=String(state.squished);
+      gameOverOverlay.hidden=false; tone(150,.55,'sawtooth',.075,-100); vibrate([150,90,170]);
+    }
+
+    function restartGame() {
+      clearInterval(spawnTimer); clearEntities();
+      const oldBest=saved.bestScore;
+      state=freshState(); saved.bestScore=oldBest;
+      updateHud(); startLevel();
+    }
+
+    function setPaused(paused,automatic=false) {
+      if(!state.running) return;
+      state.paused=paused;
+      pauseOverlay.hidden=!paused;
+      if(!paused) state.lastFrameAt=performance.now();
+      if(paused&&!automatic) tone(220,.08,'triangle',.035,-40);
+    }
+
+    function tick(now) {
+      rafId=requestAnimationFrame(tick);
+      if(!state.running||state.paused||state.levelEnded) return;
+      if(!state.lastFrameAt) state.lastFrameAt=now;
+      const dt=Math.min(.034,(now-state.lastFrameAt)/1000);
+      state.lastFrameAt=now;
+      state.timeLeft-=dt;
+      const frozen=now<state.freezeUntil;
+
+      for(const entity of [...state.entities.values()]) {
+        if(entity.kind==='ant') {
+          if(!entity.alive||frozen) continue;
+          entity.y+=entity.vy*dt;
+          positionAnt(entity,now);
+          if(entity.y>CONFIG.container.height+entity.size) missAnt(entity);
+        } else if(entity.kind==='powerup') {
+          if(now>=entity.expiresAt) removeEntity(entity.id);
+        } else if(entity.kind==='queen'&&entity.alive) {
+          const t=(now-entity.bornAt)/1000;
+          entity.x=107+72*Math.sin(t*.72);
+          entity.y=165+52*Math.sin(t*1.08+.8);
+          entity.el.style.transform=`translate(${entity.x}px,${entity.y}px) rotate(${(90+18*Math.sin(t*1.3)).toFixed(1)}deg)`;
+        }
+      }
+
+      if(state.timeLeft<=0) {
+        if(state.bossActive) gameOver('The Queen Ant escaped and rallied the colony.');
+        else endLevel('You survived the wave.');
+      }
+      updateHud();
+    }
+
+    game.addEventListener('pointerdown',(event)=>{
+      if(!state.running||state.paused) return;
+      if(event.target.closest('.entity,button,.panel')) return;
+      state.totalTaps++; state.combo=0; tone(60,.025,'square',.018,0); updateHud();
+    });
+
+    $('startBtn').addEventListener('click',async()=>{
+      initializeAudio();
+      if(isMobile()&&!isStandalone()) await requestFullscreen();
+      fitToScreen(); restartGame();
+    });
+    $('nextBtn').addEventListener('click',()=>{state.levelIndex++;startLevel();});
+    $('replayBtn').addEventListener('click',()=>{state.score=state.levelStartScore;startLevel();});
+    $('restartBtn').addEventListener('click',restartGame);
+    $('resumeBtn').addEventListener('click',()=>setPaused(false));
+    pauseBtn.addEventListener('click',()=>setPaused(true));
+    soundBtn.addEventListener('click',()=>{saved.sound=!saved.sound;saveSettings();if(saved.sound)initializeAudio();updateHud();});
+    $('howBtn').addEventListener('click',()=>alert('Tap ants before they escape. Carpenter ants need two hits. Build combos for score multipliers. Every fifth level features a Queen Ant. Power-ups: bug spray freezes ants, the slipper clears the board, and repellent lowers infestation. The game ends at 100% infestation.'));
+    $('shareBtn').addEventListener('click',async()=>{
+      const text=`I scored ${state.score.toLocaleString()} in JNC Ant Wars and reached Level ${currentLevelNumber()}!`;
+      try { if(navigator.share) await navigator.share({title:'JNC Ant Wars',text}); else {await navigator.clipboard.writeText(text);showBanner('SCORE COPIED');} }
+      catch(error){ if(error?.name!=='AbortError') showBanner('SHARE UNAVAILABLE'); }
+    });
+
+    window.addEventListener('beforeinstallprompt',(event)=>{event.preventDefault();deferredInstallPrompt=event;installBtn.hidden=false;});
+    installBtn.addEventListener('click',async()=>{
+      if(deferredInstallPrompt){deferredInstallPrompt.prompt();await deferredInstallPrompt.userChoice;deferredInstallPrompt=null;installBtn.hidden=true;}
+      else if(/iPhone|iPad|iPod/i.test(navigator.userAgent)) alert('On iPhone or iPad: tap Share, then Add to Home Screen.');
+    });
+    window.addEventListener('appinstalled',()=>{installBtn.hidden=true;showBanner('APP INSTALLED');});
+
+    document.addEventListener('visibilitychange',()=>{if(document.hidden&&state.running&&!state.paused)setPaused(true,true);});
+    window.addEventListener('resize',fitToScreen);
+    window.visualViewport?.addEventListener('resize',fitToScreen);
+    document.addEventListener('fullscreenchange',fitToScreen);
+
+    if('serviceWorker' in navigator) window.addEventListener('load',()=>Promise.reject(new Error('Standalone build: service worker requires the PWA package')).catch(error=>console.info('[AntWars] Service worker:',error)));
+
+    // Lightweight diagnostics/tuning hooks for testing future builds.
+    window.AntWars = Object.freeze({
+      snapshot: () => ({
+        level: currentLevelNumber(), score: state.score, infestation: state.infestation,
+        combo: state.combo, highestCombo: state.highestCombo, bossActive: state.bossActive,
+        queenHp: state.queen?.hp ?? 0, entities: state.entities.size, running: state.running
+      }),
+      skipToLevel: (levelNumber) => { state.levelIndex=Math.max(0,Math.floor(levelNumber)-1); startLevel(); },
+      setInfestation: (value) => { state.infestation=L.clamp(Number(value)||0,0,100); updateHud(); if(state.infestation>=100) gameOver('The kitchen was completely overrun.'); },
+      spawnPowerup: () => spawnPowerup(132,260),
+      clearEntities
+    });
+
+    updateBestText(); updateHud(); fitToScreen();
+    rafId=requestAnimationFrame(tick);
+
+    console.assert(typeof L.calculateKillScore==='function','AntWars logic missing');
+    console.assert(L.isBossLevel(5)&&!L.isBossLevel(6),'Boss-level test failed');
+    console.assert(L.infestationAfterEscape(95,'carpenter')===100,'Infestation clamp failed');
+    console.log('[AntWars] BUILD 3.3 ready.');
+  })();
+  </script>
 </body>
 </html>
